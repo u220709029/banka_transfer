@@ -1,0 +1,8 @@
+package com.banka.banka.exception;
+
+public class InsufficientBalanceException extends RuntimeException {
+
+    public InsufficientBalanceException(String message) {
+        super(message);
+    }
+}
