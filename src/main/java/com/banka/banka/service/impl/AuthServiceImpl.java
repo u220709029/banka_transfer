@@ -4,6 +4,7 @@ import com.banka.banka.dto.request.LoginRequest;
 import com.banka.banka.dto.response.AuthResponse;
 import com.banka.banka.entity.User;
 import com.banka.banka.repository.UserRepository;
+import com.banka.banka.security.JwtUtils;
 import com.banka.banka.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +16,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtils jwtUtils;
 
     @Override
     public AuthResponse login(LoginRequest request) {
@@ -25,8 +27,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Geçersiz şifre");
         }
 
-        // JWT token üretimi bu noktada yapılacak (security katmanı entegre edildiğinde)
-        String token = "token-placeholder-for-" + user.getEmail();
+        String token = jwtUtils.generateToken(user.getEmail());
 
         return AuthResponse.builder()
                 .token(token)
