@@ -1,0 +1,72 @@
+services:
+
+  # ───────────────────────────────────────────────────────
+  # db — PostgreSQL 15 veritabanı servisi
+  # ───────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: banka-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bankadb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "12345"
+    ports:
+      - "5432:5432"          # Yerel geliştirme için opsiyonel; üretimde kapatılabilir
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bankadb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────────────────
+  # rabbitmq — RabbitMQ mesaj kuyruğu servisi
+  # ───────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: banka-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"          # Uygulama iletişimi
+      - "15672:15672"        # Yönetim paneli (Management UI)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # ───────────────────────────────────────────────────────
+  # app — Spring Boot uygulaması
+  # ───────────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: banka-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy   # db sağlıklı olana kadar bekleme
+      rabbitmq:
+        condition: service_started
+    environment:
+      # application.properties değerlerini çevre değişkenleriyle ez
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bankadb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "12345"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+
+# ───────────────────────────────────────────────────────
+# Named volume — konteyner silinse bile veriler kalır
+# ───────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local

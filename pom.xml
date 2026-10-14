@@ -46,10 +46,24 @@
 		</dependency>
 
 
+		<!-- MySQL: yerel geliştirme ortamı için -->
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+
+		<!-- PostgreSQL: Docker/production ortamı için -->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- RabbitMQ (AMQP): Olay güdümlü (event-driven) mimari için -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
 		</dependency>
 
 		<!-- 3. Spring Boot Starter Security: JwtUtils, Filter ve SecurityConfig için -->
@@ -113,6 +127,16 @@
 			<version>2.3.0</version>
 		</dependency>
 
+		<!-- 8. Flyway: Veritabanı göç (migration) yönetimi için -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-mysql</artifactId>
+		</dependency>
+
 		<!-- Test Bağımlılıkları -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -124,7 +148,11 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-	</dependencies>
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-amqp</artifactId>
+        </dependency>
+    </dependencies>
 
 	<build>
 		<plugins>

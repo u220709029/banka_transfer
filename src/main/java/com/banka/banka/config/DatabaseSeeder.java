@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 
-@Component
+// @Component -- Flyway migration (V2__insert_mock_data.sql) tarafından yönetildiği için devre dışı bırakıldı.
 @RequiredArgsConstructor
 public class DatabaseSeeder implements CommandLineRunner {
 

@@ -1,5 +1,7 @@
 package com.banka.banka.service.impl;
 
+import com.banka.banka.config.RabbitMQConfig;
+import com.banka.banka.dto.TransferNotificationEvent;
 import com.banka.banka.dto.request.TransferRequest;
 import com.banka.banka.dto.response.TransactionResponse;
 import com.banka.banka.entity.Account;
@@ -11,6 +13,7 @@ import com.banka.banka.repository.AccountRepository;
 import com.banka.banka.repository.TransactionHistoryRepository;
 import com.banka.banka.service.TransferService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,7 @@ public class TransferServiceImpl implements TransferService {
     private final AccountRepository accountRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final TransactionMapper transactionMapper;
+    private final RabbitTemplate rabbitTemplate;
 
     @Override
     @Transactional
@@ -67,7 +71,23 @@ public class TransferServiceImpl implements TransferService {
 
         TransactionHistory savedTransaction = transactionHistoryRepository.save(transactionHistory);
 
-        // 5) Kaydedilen entity'yi TransactionResponse'a dönüştürüp döndür
+        // 5) RabbitMQ üzerinden bildirim kuyruğuna olay (event) fırlat
+        TransferNotificationEvent notificationEvent = TransferNotificationEvent.builder()
+                .fromIban(fromAccount.getIban())
+                .toIban(toAccount.getIban())
+                .amount(request.getAmount())
+                .transactionTime(savedTransaction.getTransactionDate() != null
+                        ? savedTransaction.getTransactionDate()
+                        : LocalDateTime.now())
+                .build();
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY,
+                notificationEvent
+        );
+
+        // 6) Kaydedilen entity'yi TransactionResponse'a dönüştürüp döndür
         return transactionMapper.toResponse(savedTransaction);
     }
 

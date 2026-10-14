@@ -13,6 +13,8 @@ import com.banka.banka.service.TransferService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.banka.banka.dto.TransferNotificationEvent;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,6 +26,8 @@ public class TransferServiceImpl implements TransferService {
     private final AccountRepository accountRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final TransactionMapper transactionMapper;
+    private final RabbitTemplate rabbitTemplate;
+
 
     @Override
     @Transactional
@@ -66,6 +70,21 @@ public class TransferServiceImpl implements TransferService {
                 .build();
 
         TransactionHistory savedTransaction = transactionHistoryRepository.save(transactionHistory);
+
+        // --- RABBITMQ MESAJ FIRLATMA BLOĞU BAŞLANGICI ---
+        // Transfer detaylarını, RabbitMQ'ya göndermek üzere DTO (Event) içine paketliyoruz.
+        TransferNotificationEvent event = new TransferNotificationEvent(
+                fromAccount.getIban(),
+                toAccount.getIban(),
+                request.getAmount(),
+                LocalDateTime.now()
+        );
+
+        // Paketlenmiş mesajı, konfigürasyonda belirlediğimiz dağıtıcıya (Exchange) ve rotaya (Routing Key) gönderiyoruz.
+        rabbitTemplate.convertAndSend("banka.exchange", "transfer.notification.routing.key", event);
+        // --- RABBITMQ MESAJ FIRLATMA BLOĞU BİTİŞİ ---
+
+
 
         // 5) Kaydedilen entity'yi TransactionResponse'a dönüştürüp döndür
         return transactionMapper.toResponse(savedTransaction);
