@@ -1,0 +1,35 @@
+name: Spring Boot CI Pipeline
+
+# Bu boru hattı, 'main' dalına her kod itildiğinde (push)
+# veya birleştirme isteği (pull request) açıldığında otomatik tetiklenir.
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    # GitHub'ın arka planda kiralayacağı sanal makinenin işletim sistemi
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Adım: GitHub reposundaki kodlarımızı sanal makineye indirir (Checkout).
+      - name: Repodan kodları çek
+        uses: actions/checkout@v4
+
+      # 2. Adım: Sanal makineye Java 17 kurar. Projemizin çalışması için şarttır.
+      - name: JDK 17 Kurulumu
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven # Bağımlılıkları önbelleğe alarak sonraki testleri hızlandırır
+
+      # 3. Adım: Linux sanal makinesinde Maven derleyici komutunun çalıştırılabilir yetkisini verir.
+      - name: Maven Wrapper'a çalışma izni ver (chmod)
+        run: chmod +x banka/mvnw
+
+      # 4. Adım: Projeyi derler ve tüm testleri çalıştırır.
+      - name: Maven ile Derle ve Test Et
+        run: cd banka && ./mvnw clean install -DskipTests=false
