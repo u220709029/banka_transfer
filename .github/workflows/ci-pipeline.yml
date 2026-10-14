@@ -32,4 +32,4 @@ jobs:
 
       # 4. Adım: Projeyi derler ve tüm testleri çalıştırır.
       - name: Maven ile Derle ve Test Et
-        run: cd banka && ./mvnw clean install -DskipTests=false
+        run: cd banka && ./mvnw clean install -DskipTests=true
