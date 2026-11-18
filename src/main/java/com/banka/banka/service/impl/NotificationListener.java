@@ -1,4 +1,4 @@
-package com.banka.banka.service;
+package com.banka.banka.service.impl;
 
 import com.banka.banka.config.RabbitMQConfig;
 import com.banka.banka.dto.TransferNotificationEvent;

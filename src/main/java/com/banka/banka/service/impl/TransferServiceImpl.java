@@ -16,6 +16,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import com.banka.banka.exception.LimitExceededException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,7 +34,7 @@ public class TransferServiceImpl implements TransferService {
     private final RabbitTemplate rabbitTemplate;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TransactionResponse transfer(TransferRequest request) {
 
         // 1) Gönderen ve alıcı hesapları IBAN ile Repository'den çek
@@ -47,6 +51,24 @@ public class TransferServiceImpl implements TransferService {
             throw new InsufficientBalanceException(
                     "Yetersiz bakiye. Mevcut bakiye: " + fromAccount.getBalance()
                     + ", Transfer miktarı: " + request.getAmount());
+        }
+        BigDecimal dailyLimit = new BigDecimal("10000.00");
+
+        // b) Bugünün tarihini saat 00:00:00 olacak şekilde al
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+
+        // c) Veritabanından kullanıcının bugünkü toplam transfer çıkışlarını hesapla
+        BigDecimal todayTotal = transactionHistoryRepository.sumTodayTransactionsByAccountId(fromAccount.getId(), startOfDay);
+
+        // d) Bugün yapılan toplam transfere, şu an yapılmak istenen tutarı ekle
+        BigDecimal projectedTotal = todayTotal.add(request.getAmount());
+
+        // e) Eğer beklenen yeni toplam, limiti aşıyorsa işlemi anında kes ve hata fırlat
+        if (projectedTotal.compareTo(dailyLimit) > 0) {
+            BigDecimal remainingLimit = dailyLimit.subtract(todayTotal);
+            throw new LimitExceededException(
+                    "Günlük 10.000 TL transfer limitinizi aştınız. Kalan limitiniz: " + remainingLimit + " TL"
+            );
         }
 
         // 3) Bakiye güncelleme: gönderenden düş, alıcıya ekle

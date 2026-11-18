@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -59,5 +61,14 @@ public class GlobalExceptionHandler {
                 .message(ex.getMessage() != null ? ex.getMessage() : "Beklenmeyen bir sunucu hatası oluştu")
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    @ExceptionHandler(LimitExceededException.class)
+    public ResponseEntity<Map<String, String>> handleLimitExceededException(LimitExceededException ex) {
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("error", "LIMIT_EXCEEDED");
+        errorResponse.put("message", ex.getMessage());
+
+        // Sistem çökmez, kullanıcıya kontrollü bir şekilde 400 Bad Request döner.
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 }
