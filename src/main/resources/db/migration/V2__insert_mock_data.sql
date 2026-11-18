@@ -5,15 +5,15 @@
 -- =============================================
 
 -- 1. Kullanıcıları ekle
--- BCrypt hash of "123456" → $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
+-- BCrypt hash of "123456" → $2a$10$v6AVEfJnhmNKHxc4OR9wFuGJILQEr0jz.cp2lcACOlUZxiVNcKLfi
 INSERT INTO users (first_name, last_name, username, email, password, phone_number, role, created_at, updated_at)
 VALUES
     ('Gönderen', 'Kullanıcı', 'gonderen', 'gonderen@banka.com',
-     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+     '$2a$10$v6AVEfJnhmNKHxc4OR9wFuGJILQEr0jz.cp2lcACOlUZxiVNcKLfi',
      '05550000001', 'USER', NOW(), NOW()),
 
     ('Alıcı', 'Kullanıcı', 'alici', 'alici@banka.com',
-     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+     '$2a$10$v6AVEfJnhmNKHxc4OR9wFuGJILQEr0jz.cp2lcACOlUZxiVNcKLfi',
      '05550000002', 'USER', NOW(), NOW());
 
 -- 2. Hesapları ekle
