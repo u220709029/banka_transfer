@@ -1,9 +1,11 @@
 package com.banka.banka.controller;
 
 import com.banka.banka.dto.response.AccountResponse;
+import com.banka.banka.security.CustomUserDetails;
 import com.banka.banka.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,8 +19,8 @@ public class AccountController {
     private final AccountService accountService;
 
     @GetMapping("/{iban}/balance")
-    public ResponseEntity<AccountResponse> getBalanceByIban(@PathVariable String iban) {
-        AccountResponse response = accountService.getAccountByIban(iban);
+    public ResponseEntity<AccountResponse> getBalanceByIban(@PathVariable String iban,@AuthenticationPrincipal CustomUserDetails currentUser) {
+        AccountResponse response = accountService.getAccountByIban(iban, currentUser.getId());
         return ResponseEntity.ok(response);
     }
 }

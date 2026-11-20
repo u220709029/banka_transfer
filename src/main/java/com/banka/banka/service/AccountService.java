@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface AccountService {
 
-    AccountResponse getAccountByIban(String iban);
+    AccountResponse getAccountByIban(String iban, Long userId);
 
     List<AccountResponse> getAccountsByUserId(Long userId);
 }

@@ -18,10 +18,17 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRepository accountRepository;
     private final AccountMapper accountMapper;
 
+
+
     @Override
-    public AccountResponse getAccountByIban(String iban) {
+    public AccountResponse getAccountByIban(String iban, Long userId) {
+
         Account account = accountRepository.findByIban(iban)
                 .orElseThrow(() -> new AccountNotFoundException("Hesap bulunamadı. IBAN: " + iban));
+
+        if (!account.getUser().getId().equals(userId)) {
+            throw new AccountNotFoundException("Hesap bulunamadı.");
+        }
         return accountMapper.toResponse(account);
     }
 
