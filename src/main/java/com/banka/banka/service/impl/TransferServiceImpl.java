@@ -23,6 +23,7 @@ import com.banka.banka.exception.LimitExceededException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -58,7 +59,7 @@ public class TransferServiceImpl implements TransferService {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
 
         // c) Veritabanından kullanıcının bugünkü toplam transfer çıkışlarını hesapla
-        BigDecimal todayTotal = transactionHistoryRepository.sumTodayTransactionsByAccountId(fromAccount.getId(), startOfDay);
+        BigDecimal todayTotal = Optional.ofNullable(transactionHistoryRepository.sumTodayTransactionsByAccountId(fromAccount.getId(), startOfDay)).orElse(BigDecimal.ZERO);
 
         // d) Bugün yapılan toplam transfere, şu an yapılmak istenen tutarı ekle
         BigDecimal projectedTotal = todayTotal.add(request.getAmount());

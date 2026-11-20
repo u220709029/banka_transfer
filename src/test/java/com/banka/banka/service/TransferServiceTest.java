@@ -105,6 +105,9 @@ class TransferServiceTest {
 
         when(transactionHistoryRepository.save(any(TransactionHistory.class))).thenReturn(savedTxn);
 
+        when(transactionHistoryRepository.sumTodayTransactionsByAccountId(anyLong(), any()))
+                .thenReturn(BigDecimal.ZERO);
+
         TransactionResponse mockResponse = new TransactionResponse();
         when(transactionMapper.toResponse(savedTxn)).thenReturn(mockResponse);
 
