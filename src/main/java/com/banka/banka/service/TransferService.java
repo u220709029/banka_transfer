@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface TransferService {
 
-    TransactionResponse transfer(TransferRequest request);
-
     List<TransactionResponse> getTransactionsByAccountId(Long accountId);
+
+    TransactionResponse transfer(TransferRequest request, Long userId);
 }

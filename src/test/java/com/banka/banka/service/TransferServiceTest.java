@@ -5,6 +5,7 @@ import com.banka.banka.dto.response.TransactionResponse;
 import com.banka.banka.entity.Account;
 import com.banka.banka.entity.TransactionHistory;
 import com.banka.banka.exception.InsufficientBalanceException;
+import com.banka.banka.exception.UnauthorizedAccountAccessException;
 import com.banka.banka.mapper.TransactionMapper;
 import com.banka.banka.repository.AccountRepository;
 import com.banka.banka.repository.TransactionHistoryRepository;
@@ -17,10 +18,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import com.banka.banka.entity.User;
 import java.math.BigDecimal;
 import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -64,10 +64,11 @@ class TransferServiceTest {
      * Bu şekilde testler birbirini etkilemez (test isolation).
      */
     @BeforeEach
-    void setUp() {
+    void setUp() {User owner = User.builder().id(1L).build();
         gonderenHesap = Account.builder()
                 .id(1L)
                 .iban(GONDEREN_IBAN)
+                .user(owner)
                 .balance(new BigDecimal("1000.00"))
                 .currency("TRY")
                 .active(true)
@@ -119,7 +120,7 @@ class TransferServiceTest {
                 .build();
 
         // ACT — asıl metodu çağır
-        TransactionResponse result = transferService.transfer(request);
+        TransactionResponse result = transferService.transfer(request, 1L);
 
         // ASSERT 1: Bakiye doğrulamaları
         assertEquals(new BigDecimal("800.00"), gonderenHesap.getBalance(),
@@ -182,7 +183,7 @@ class TransferServiceTest {
         // ACT + ASSERT 1: Doğru exception fırlatılmalı
         InsufficientBalanceException exception = assertThrows(
                 InsufficientBalanceException.class,
-                () -> transferService.transfer(request),
+                () -> transferService.transfer(request, 1L),
                 "100 TL bakiyeyle 500 TL transfer InsufficientBalanceException fırlatmalı"
         );
 
@@ -201,5 +202,37 @@ class TransferServiceTest {
         verify(accountRepository, never()).save(any(Account.class));
         verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
         verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), any(Object.class));
+    }
+    @Test
+    void shouldThrowUnauthorizedAccountAccessException_WhenUserDoesNotOwnAccount() {
+        // 1. Hazırlık (Arrange): Hesabın gerçek sahibi 1L
+        User owner = User.builder().id(1L).build();
+        Account fromAccount = Account.builder()
+                .id(1L)
+                .iban("TR110000000000000000000001")
+                .balance(new BigDecimal("10000"))
+                .user(owner)
+                .active(true)
+                .build();
+
+        TransferRequest request = new TransferRequest();
+        request.setFromIban("TR110000000000000000000001");
+        request.setToIban("TR220000000000000000000002");
+        request.setAmount(new BigDecimal("500"));
+
+        // Repository çağrıldığında yukarıdaki 1L'ye ait hesabı dönmesini söyle
+        when(accountRepository.findByIban(request.getFromIban()))
+                .thenReturn(Optional.of(fromAccount));
+
+        Long anotherUserId = 999L; // Hesabın sahibi OLMAYAN başka bir kullanıcı
+
+        // 2. Çalıştır ve Doğrula (Act & Assert):
+        // 999L ile çağırınca UnauthorizedAccountAccessException fırlatmalı
+        assertThrows(UnauthorizedAccountAccessException.class, () ->
+                transferService.transfer(request, anotherUserId)
+        );
+
+        // 3. Veritabanına hiçbir şey kaydedilmediğini doğrula:
+        verify(accountRepository, never()).save(any());
     }
 }

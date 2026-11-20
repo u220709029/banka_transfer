@@ -2,10 +2,12 @@ package com.banka.banka.controller;
 
 import com.banka.banka.dto.request.TransferRequest;
 import com.banka.banka.dto.response.TransactionResponse;
+import com.banka.banka.security.CustomUserDetails;
 import com.banka.banka.service.TransferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,8 +21,10 @@ public class TransferController {
     private final TransferService transferService;
 
     @PostMapping
-    public ResponseEntity<TransactionResponse> transfer(@Valid @RequestBody TransferRequest request) {
-        TransactionResponse response = transferService.transfer(request);
+    public ResponseEntity<TransactionResponse> transfer(
+            @Valid @RequestBody TransferRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        TransactionResponse response = transferService.transfer(request, currentUser.getId());
         return ResponseEntity.ok(response);
     }
 }

@@ -8,6 +8,7 @@ import com.banka.banka.entity.Account;
 import com.banka.banka.entity.TransactionHistory;
 import com.banka.banka.exception.AccountNotFoundException;
 import com.banka.banka.exception.InsufficientBalanceException;
+import com.banka.banka.exception.UnauthorizedAccountAccessException;
 import com.banka.banka.mapper.TransactionMapper;
 import com.banka.banka.repository.AccountRepository;
 import com.banka.banka.repository.TransactionHistoryRepository;
@@ -36,18 +37,25 @@ public class TransferServiceImpl implements TransferService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TransactionResponse transfer(TransferRequest request) {
+    public TransactionResponse transfer(TransferRequest request, Long userId) {
 
-        // 1) Gönderen ve alıcı hesapları IBAN ile Repository'den çek
         Account fromAccount = accountRepository.findByIban(request.getFromIban())
                 .orElseThrow(() -> new AccountNotFoundException(
                         "Gönderen hesap bulunamadı. IBAN: " + request.getFromIban()));
+
+        if (!fromAccount.getUser().getId().equals(userId)) {
+            throw new UnauthorizedAccountAccessException(
+                    "Bu hesap üzerinde işlem yapma yetkiniz yok.");
+        }
+        if (Boolean.FALSE.equals(fromAccount.getActive())) {
+            throw new UnauthorizedAccountAccessException("Gönderen hesap aktif değil.");
+        }
 
         Account toAccount = accountRepository.findByIban(request.getToIban())
                 .orElseThrow(() -> new AccountNotFoundException(
                         "Alıcı hesap bulunamadı. IBAN: " + request.getToIban()));
 
-        // 2) Gönderenin bakiyesinin yeterliliğini kontrol et
+
         if (fromAccount.getBalance().compareTo(request.getAmount()) < 0) {
             throw new InsufficientBalanceException(
                     "Yetersiz bakiye. Mevcut bakiye: " + fromAccount.getBalance()
@@ -55,16 +63,12 @@ public class TransferServiceImpl implements TransferService {
         }
         BigDecimal dailyLimit = new BigDecimal("10000.00");
 
-        // b) Bugünün tarihini saat 00:00:00 olacak şekilde al
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
 
-        // c) Veritabanından kullanıcının bugünkü toplam transfer çıkışlarını hesapla
         BigDecimal todayTotal = Optional.ofNullable(transactionHistoryRepository.sumTodayTransactionsByAccountId(fromAccount.getId(), startOfDay)).orElse(BigDecimal.ZERO);
 
-        // d) Bugün yapılan toplam transfere, şu an yapılmak istenen tutarı ekle
         BigDecimal projectedTotal = todayTotal.add(request.getAmount());
 
-        // e) Eğer beklenen yeni toplam, limiti aşıyorsa işlemi anında kes ve hata fırlat
         if (projectedTotal.compareTo(dailyLimit) > 0) {
             BigDecimal remainingLimit = dailyLimit.subtract(todayTotal);
             throw new LimitExceededException(
@@ -72,7 +76,6 @@ public class TransferServiceImpl implements TransferService {
             );
         }
 
-        // 3) Bakiye güncelleme: gönderenden düş, alıcıya ekle
         fromAccount.setBalance(fromAccount.getBalance().subtract(request.getAmount()));
         toAccount.setBalance(toAccount.getBalance().add(request.getAmount()));
 
