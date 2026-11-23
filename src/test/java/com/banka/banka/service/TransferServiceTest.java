@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.banka.banka.entity.User;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -90,8 +91,8 @@ class TransferServiceTest {
     void shouldTransferSuccessfully() {
 
         // ARRANGE — bağımlılıkların davranışlarını tanımla
-        when(accountRepository.findByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
-        when(accountRepository.findByIban(ALICI_IBAN)).thenReturn(Optional.of(aliciHesap));
+        when(accountRepository.findWithLockByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
+        when(accountRepository.findWithLockByIban(ALICI_IBAN)).thenReturn(Optional.of(aliciHesap));
 
         TransactionHistory savedTxn = TransactionHistory.builder()
                 .id(10L)
@@ -170,8 +171,8 @@ class TransferServiceTest {
         // ARRANGE — gönderenin bakiyesi sadece 100 TL
         gonderenHesap.setBalance(new BigDecimal("100.00"));
 
-        when(accountRepository.findByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
-        when(accountRepository.findByIban(ALICI_IBAN)).thenReturn(Optional.of(aliciHesap));
+        when(accountRepository.findWithLockByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
+        when(accountRepository.findWithLockByIban(ALICI_IBAN)).thenReturn(Optional.of(aliciHesap));
 
         TransferRequest request = TransferRequest.builder()
                 .fromIban(GONDEREN_IBAN)
@@ -220,8 +221,7 @@ class TransferServiceTest {
         request.setToIban("TR220000000000000000000002");
         request.setAmount(new BigDecimal("500"));
 
-        // Repository çağrıldığında yukarıdaki 1L'ye ait hesabı dönmesini söyle
-        when(accountRepository.findByIban(request.getFromIban()))
+        when(accountRepository.findWithLockByIban(request.getFromIban()))
                 .thenReturn(Optional.of(fromAccount));
 
         Long anotherUserId = 999L; // Hesabın sahibi OLMAYAN başka bir kullanıcı
@@ -234,5 +234,37 @@ class TransferServiceTest {
 
         // 3. Veritabanına hiçbir şey kaydedilmediğini doğrula:
         verify(accountRepository, never()).save(any());
+    }
+    @Test
+    @DisplayName("her iki hesap da kötümser kilitle okunmalı")
+    void shouldLoadBothAccountsWithAPessimisticLock() {
+
+        // ARRANGE
+        when(accountRepository.findWithLockByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
+        when(accountRepository.findWithLockByIban(ALICI_IBAN)).thenReturn(Optional.of(aliciHesap));
+
+        when(transactionHistoryRepository.sumTodayTransactionsByAccountId(anyLong(), any()))
+                .thenReturn(BigDecimal.ZERO);
+
+        when(transactionHistoryRepository.save(any(TransactionHistory.class)))
+                .thenReturn(TransactionHistory.builder()
+                        .id(11L)
+                        .transactionDate(LocalDateTime.now())
+                        .build());
+
+        TransferRequest request = TransferRequest.builder()
+                .fromIban(GONDEREN_IBAN)
+                .toIban(ALICI_IBAN)
+                .amount(new BigDecimal("100.00"))
+                .description("Kilit testi")
+                .build();
+
+        // ACT
+        transferService.transfer(request, 1L);
+
+        // ASSERT — iki satır da kilitli okunmalı, kilitsiz okuma hiç olmamalı
+        verify(accountRepository).findWithLockByIban(GONDEREN_IBAN);
+        verify(accountRepository).findWithLockByIban(ALICI_IBAN);
+        verify(accountRepository, never()).findByIban(any());
     }
 }

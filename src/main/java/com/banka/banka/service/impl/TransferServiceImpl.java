@@ -39,9 +39,20 @@ public class TransferServiceImpl implements TransferService {
     @Transactional(rollbackFor = Exception.class)
     public TransactionResponse transfer(TransferRequest request, Long userId) {
 
-        Account fromAccount = accountRepository.findByIban(request.getFromIban())
+        String fromIban = request.getFromIban();
+        String toIban = request.getToIban();
+
+///alfabetic order ---  prevented the deadlock
+        boolean fromIsFirst = fromIban.compareTo(toIban) <= 0;
+        String firstIban = fromIsFirst ? fromIban : toIban;
+        String secondIban = fromIsFirst ? toIban : fromIban;
+
+        Optional<Account> first = accountRepository.findWithLockByIban(firstIban);
+        Optional<Account> second = accountRepository.findWithLockByIban(secondIban);
+
+        Account fromAccount = (fromIsFirst ? first : second)
                 .orElseThrow(() -> new AccountNotFoundException(
-                        "Gönderen hesap bulunamadı. IBAN: " + request.getFromIban()));
+                        "Gönderen hesap bulunamadı. IBAN: " + fromIban));
 
         if (!fromAccount.getUser().getId().equals(userId)) {
             throw new UnauthorizedAccountAccessException(
@@ -51,9 +62,9 @@ public class TransferServiceImpl implements TransferService {
             throw new UnauthorizedAccountAccessException("Gönderen hesap aktif değil.");
         }
 
-        Account toAccount = accountRepository.findByIban(request.getToIban())
+        Account toAccount = (fromIsFirst ? second : first)
                 .orElseThrow(() -> new AccountNotFoundException(
-                        "Alıcı hesap bulunamadı. IBAN: " + request.getToIban()));
+                        "Alıcı hesap bulunamadı. IBAN: " + toIban));
 
 
         if (fromAccount.getBalance().compareTo(request.getAmount()) < 0) {
