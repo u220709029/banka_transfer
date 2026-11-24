@@ -5,8 +5,11 @@ A backend API for money transfers between bank accounts. It is built with Spring
 ## Features
 
 - **Login with JWT** – users log in and get a token. All other endpoints need this token.
-- **Safe transfers** – the balance check, the balance update, and the history record run in one database transaction. If anything fails, everything is rolled back.
+- **Safe transfers** – the balance check, the balance update, and the history record run in one database transaction. If anything fails, everything is rolled back. A transaction alone does not stop two concurrent transfers from reading the same balance, which is what the lock below is for.
 - **IBAN validation** – requests are checked for a valid Turkish IBAN format (`TR...`).
+- **Ownership checks** – a transfer is refused with 403 unless the sending account belongs to the authenticated user, and the balance endpoint answers 404 for an account that is not theirs, so an IBAN cannot be probed for existence.
+- **No double spending** – both accounts are loaded with a `PESSIMISTIC_WRITE` lock, always in alphabetical IBAN order so two opposite transfers cannot deadlock.
+- **Idempotent transfers** – an optional `Idempotency-Key` header makes a retried request return the first result instead of moving the money again.
 - **Async notifications** – after a successful transfer, the API publishes an event to RabbitMQ. A listener reads it in the background, so the user gets the response without waiting.
 - **Database migrations** – Flyway creates the tables and inserts test data.
 - **API docs** – Swagger UI is included.
@@ -16,10 +19,12 @@ A backend API for money transfers between bank accounts. It is built with Spring
 
 ```
 Client ──POST /api/v1/transfers──▶ TransferService
-                                      │ 1. find both accounts by IBAN
-                                      │ 2. check the balance
-                                      │ 3. update both balances + save history (one transaction)
-                                      │ 4. publish an event to RabbitMQ (banka.exchange)
+       (optional Idempotency-Key)     │ 1. lock both accounts (alphabetical IBAN order)
+                                      │ 2. check ownership of the sending account
+                                      │ 3. if the key was seen before, return the first result
+                                      │ 4. check the balance and the daily limit
+                                      │ 5. update both balances + save history (one transaction)
+                                      │ 6. record the key, publish an event to RabbitMQ
                                       ▼
 Client ◀── 200 OK ──────────────  response
 
@@ -47,6 +52,10 @@ RabbitMQ ──▶ NotificationListener  (reads the event and logs the notificat
 | POST | `/api/v1/auth/login` | No | Log in and get a JWT |
 | GET | `/api/v1/accounts/{iban}/balance` | Yes | Get account balance |
 | POST | `/api/v1/transfers` | Yes | Transfer money between two accounts |
+
+`POST /api/v1/transfers` accepts an optional `Idempotency-Key` header. Send the same key with
+the same body to retry safely: the first transaction is returned and no money moves twice.
+The same key with different details is refused with 409.
 
 ## Getting started
 
@@ -105,7 +114,9 @@ The JWT secret has a default value in the code. Change it before using the proje
    { "email": "gonderen@banka.com", "password": "123456" }
    ```
 
-3. Copy the token from the response. Click **Authorize** and enter `Bearer <token>`.
+3. Copy the token from the response. Click **Authorize** and paste the token on its own —
+   Swagger adds the `Bearer ` prefix itself, and typing it as well produces
+   `Bearer Bearer …`, which the filter rejects with an empty 403.
 4. Call `POST /api/v1/transfers` with a body like this:
 
    ```json
@@ -125,6 +136,8 @@ The JWT secret has a default value in the code. Change it before using the proje
    | alici@banka.com | `TR220000000000000000000002` | 500 TRY |
 
 5. Check the application logs. You will see the message that the RabbitMQ listener received.
+6. Send the same transfer twice with the same `Idempotency-Key` header. The second call
+   returns the same transaction `id`, and the balance drops only once.
 
 ## Project structure
 
@@ -133,7 +146,7 @@ The JWT secret has a default value in the code. Change it before using the proje
 │   ├── controller/   # REST endpoints
 │   ├── service/      # business logic (transfer, auth, account) + NotificationListener
 │   ├── repository/   # Spring Data JPA repositories
-│   ├── entity/       # User, Account, TransactionHistory
+│   ├── entity/       # User, Account, TransactionHistory, IdempotencyRecord
 │   ├── dto/          # request, response, and event objects
 │   ├── mapper/       # MapStruct mappers
 │   ├── security/     # JWT utilities and user details
@@ -141,7 +154,7 @@ The JWT secret has a default value in the code. Change it before using the proje
 │   ├── config/       # security, RabbitMQ, OpenAPI
 │   ├── validation/   # IBAN validator
 │   └── exception/    # custom exceptions and global handler
-├── src/main/resources/db/migration/   # Flyway scripts (V1 schema, V2 test data)
+├── src/main/resources/db/migration/   # Flyway scripts (V1 schema, V2 data, V3 idempotency keys)
 ├── src/test/                          # unit tests for the transfer service
 ├── Dockerfile                         # multi-stage build (Maven, then a small JRE image)
 ├── docker-compose.yml                 # app + PostgreSQL + RabbitMQ
@@ -154,10 +167,11 @@ The JWT secret has a default value in the code. Change it before using the proje
 ./mvnw test
 ```
 
-`TransferServiceTest` covers six cases: a successful transfer, a transfer refused for
+`TransferServiceTest` covers seven cases: a successful transfer, a transfer refused for
 insufficient balance, a transfer from an account the caller does not own, the pessimistic
 lock being used to load both accounts, a replayed `Idempotency-Key` returning the first
-result without moving money again, and the same key reused with different details.
+result without moving money again, the same key reused with different details, and a
+transfer where both accounts are the same.
 
 ## CI
 
@@ -169,8 +183,9 @@ tests. The surefire reports are uploaded as a build artifact, including when the
 
 Every business rule failure has its own exception type — `AccountNotFoundException`,
 `InsufficientBalanceException`, `LimitExceededException`, `UnauthorizedAccountAccessException`,
-`IdempotencyKeyConflictException` — and `GlobalExceptionHandler` maps each one to an HTTP
-status. This is readable while the list is short, which it still is.
+`IdempotencyKeyConflictException`, `SameAccountTransferException` — and
+`GlobalExceptionHandler` maps each one to an HTTP status. This is readable while the list is
+short, which it still is.
 
 If the number of error cases grows (roughly past fifteen), the plan is to restructure it
 rather than keep adding one class and one handler per case:
@@ -196,4 +211,6 @@ A related note on where a rule belongs: a check that needs no database access �
 one request being identical, say — can also be expressed as a bean validation constraint on the
 request DTO, which fails at the edge with a 400 before the service is entered. Real systems
 often keep both: the cheap check at the boundary and the invariant in the domain, so the rule
-still holds if one path is bypassed.
+still holds if one path is bypassed. This is what `SameAccountTransferException` does today, at
+the service layer: it compares the two account ids once both rows are loaded, so the rule holds
+even for two IBAN strings that are not byte-identical.
