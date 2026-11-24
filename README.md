@@ -154,8 +154,46 @@ The JWT secret has a default value in the code. Change it before using the proje
 ./mvnw test
 ```
 
-`TransferServiceTest` checks two cases: a successful transfer, and a transfer that fails because of insufficient balance.
+`TransferServiceTest` covers six cases: a successful transfer, a transfer refused for
+insufficient balance, a transfer from an account the caller does not own, the pessimistic
+lock being used to load both accounts, a replayed `Idempotency-Key` returning the first
+result without moving money again, and the same key reused with different details.
 
 ## CI
 
-The GitHub Actions workflow runs on pushes and pull requests to `main` or `master`. It sets up Java 17 and builds the project with Maven (the build step skips tests for now).
+The GitHub Actions workflow runs on pushes and pull requests to `main` or `master`. It sets
+up Java 17 and runs `./mvnw -B clean verify`, so every push compiles the project and runs the
+tests. The surefire reports are uploaded as a build artifact, including when the build fails.
+
+## Error handling, and where it is heading
+
+Every business rule failure has its own exception type — `AccountNotFoundException`,
+`InsufficientBalanceException`, `LimitExceededException`, `UnauthorizedAccountAccessException`,
+`IdempotencyKeyConflictException` — and `GlobalExceptionHandler` maps each one to an HTTP
+status. This is readable while the list is short, which it still is.
+
+If the number of error cases grows (roughly past fifteen), the plan is to restructure it
+rather than keep adding one class and one handler per case:
+
+- **Give the exceptions a common `BusinessException` base class carrying a machine-readable
+  error code**, for example `TRANSFER_SAME_ACCOUNT`. A client cannot branch on a message
+  string: the message is free to change or be translated, so only the code can be part of the
+  API contract.
+- **Collapse the per-type handlers into one.** A single `@ExceptionHandler` for the base class
+  can read the status and the code from the exception itself, instead of this file growing by
+  one method for every new rule.
+- **Return errors as RFC 7807 `ProblemDetail`** (`application/problem+json`), which Spring Boot
+  3 supports out of the box, instead of the project's own `ErrorResponse` shape. A standard
+  format is understood by client libraries, gateways and monitoring tools; a bespoke one has to
+  be parsed by hand by everyone who integrates.
+
+If the list ever gets genuinely long, the alternative worth weighing is a single exception type
+plus an `ErrorCode` enum that holds the status and default message for each case: fewer files,
+all the cases visible in one place, at the cost of not being able to catch a specific failure
+by its type.
+
+A related note on where a rule belongs: a check that needs no database access — two IBANs in
+one request being identical, say — can also be expressed as a bean validation constraint on the
+request DTO, which fails at the edge with a 400 before the service is entered. Real systems
+often keep both: the cheap check at the boundary and the invariant in the domain, so the rule
+still holds if one path is bypassed.
