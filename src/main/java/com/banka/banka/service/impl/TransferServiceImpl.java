@@ -90,6 +90,11 @@ public class TransferServiceImpl implements TransferService {
                 .orElseThrow(() -> new AccountNotFoundException(
                         "Alıcı hesap bulunamadı. IBAN: " + toIban));
 
+        if (fromAccount.getId().equals(toAccount.getId())) {
+            throw new SameAccountTransferException(
+                    "Gönderen ve alıcı hesap aynı olamaz.");
+        }
+
 
         if (fromAccount.getBalance().compareTo(request.getAmount()) < 0) {
             throw new InsufficientBalanceException(

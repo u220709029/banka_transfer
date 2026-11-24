@@ -280,4 +280,12 @@ class TransferServiceTest {
         // kayıttaki fingerprint farklı olsun
         // ASSERT: IdempotencyKeyConflictException fırlamalı, hiçbir şey kaydedilmemeli
     }
+    @Test
+    void shouldRejectATransferToTheSameAccount() {
+        // from ve to aynı hesabı dönsün (aynı id)
+        // ASSERT: SameAccountTransferException fırlamalı
+        verify(accountRepository, never()).save(any());
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), any(Object.class));
+    }
 }
