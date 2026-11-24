@@ -9,5 +9,5 @@ public interface TransferService {
 
     List<TransactionResponse> getTransactionsByAccountId(Long accountId);
 
-    TransactionResponse transfer(TransferRequest request, Long userId);
+    TransactionResponse transfer(TransferRequest request, Long userId, String idempotencyKey);
 }

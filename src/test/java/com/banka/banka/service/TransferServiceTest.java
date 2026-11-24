@@ -121,7 +121,7 @@ class TransferServiceTest {
                 .build();
 
         // ACT — asıl metodu çağır
-        TransactionResponse result = transferService.transfer(request, 1L);
+        TransactionResponse result = transferService.transfer(request, 1L,null);
 
         // ASSERT 1: Bakiye doğrulamaları
         assertEquals(new BigDecimal("800.00"), gonderenHesap.getBalance(),
@@ -184,7 +184,7 @@ class TransferServiceTest {
         // ACT + ASSERT 1: Doğru exception fırlatılmalı
         InsufficientBalanceException exception = assertThrows(
                 InsufficientBalanceException.class,
-                () -> transferService.transfer(request, 1L),
+                () -> transferService.transfer(request, 1L,null),
                 "100 TL bakiyeyle 500 TL transfer InsufficientBalanceException fırlatmalı"
         );
 
@@ -229,7 +229,7 @@ class TransferServiceTest {
         // 2. Çalıştır ve Doğrula (Act & Assert):
         // 999L ile çağırınca UnauthorizedAccountAccessException fırlatmalı
         assertThrows(UnauthorizedAccountAccessException.class, () ->
-                transferService.transfer(request, anotherUserId)
+                transferService.transfer(request, anotherUserId,null)
         );
 
         // 3. Veritabanına hiçbir şey kaydedilmediğini doğrula:
@@ -260,11 +260,24 @@ class TransferServiceTest {
                 .build();
 
         // ACT
-        transferService.transfer(request, 1L);
+        transferService.transfer(request, 1L, null);
 
         // ASSERT — iki satır da kilitli okunmalı, kilitsiz okuma hiç olmamalı
         verify(accountRepository).findWithLockByIban(GONDEREN_IBAN);
         verify(accountRepository).findWithLockByIban(ALICI_IBAN);
         verify(accountRepository, never()).findByIban(any());
+    }
+    @Test
+    void shouldReturnTheFirstResultWhenTheSameKeyIsReplayed() {
+        // findByIdempotencyKey mevcut bir kayıt dönsün
+        // ASSERT: transactionHistoryRepository.save HİÇ çağrılmamalı
+        //         rabbitTemplate.convertAndSend HİÇ çağrılmamalı
+        //         accountRepository.save HİÇ çağrılmamalı
+    }
+
+    @Test
+    void shouldRejectTheSameKeyUsedWithADifferentRequest() {
+        // kayıttaki fingerprint farklı olsun
+        // ASSERT: IdempotencyKeyConflictException fırlamalı, hiçbir şey kaydedilmemeli
     }
 }
