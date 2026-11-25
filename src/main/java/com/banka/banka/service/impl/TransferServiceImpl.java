@@ -1,6 +1,7 @@
 package com.banka.banka.service.impl;
 
 import com.banka.banka.config.RabbitMQConfig;
+import com.banka.banka.config.TransferLimitProperties;
 import com.banka.banka.dto.TransferNotificationEvent;
 import com.banka.banka.dto.request.TransferRequest;
 import com.banka.banka.dto.response.TransactionResponse;
@@ -38,6 +39,7 @@ public class TransferServiceImpl implements TransferService {
     private final TransactionMapper transactionMapper;
     private final RabbitTemplate rabbitTemplate;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
+    private final TransferLimitProperties transferLimitProperties;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -101,19 +103,21 @@ public class TransferServiceImpl implements TransferService {
                     "Yetersiz bakiye. Mevcut bakiye: " + fromAccount.getBalance()
                     + ", Transfer miktarı: " + request.getAmount());
         }
-        BigDecimal dailyLimit = new BigDecimal("10000.00");
+        BigDecimal dailyLimit = transferLimitProperties.getDailyLimit();
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
 
-        BigDecimal todayTotal = Optional.ofNullable(transactionHistoryRepository.sumTodayTransactionsByAccountId(fromAccount.getId(), startOfDay)).orElse(BigDecimal.ZERO);
+        BigDecimal todayTotal = Optional.ofNullable(
+                transactionHistoryRepository.sumTodayTransactionsByAccountId(
+                        fromAccount.getId(), startOfDay)).orElse(BigDecimal.ZERO);
 
         BigDecimal projectedTotal = todayTotal.add(request.getAmount());
 
         if (projectedTotal.compareTo(dailyLimit) > 0) {
             BigDecimal remainingLimit = dailyLimit.subtract(todayTotal);
             throw new LimitExceededException(
-                    "Günlük 10.000 TL transfer limitinizi aştınız. Kalan limitiniz: " + remainingLimit + " TL"
-            );
+                    "Günlük " + dailyLimit.toPlainString() + " TL transfer limitinizi aştınız. "
+                            + "Kalan limitiniz: " + remainingLimit.toPlainString() + " TL");
         }
 
         fromAccount.setBalance(fromAccount.getBalance().subtract(request.getAmount()));

@@ -1,5 +1,6 @@
 package com.banka.banka.service;
 
+import com.banka.banka.config.TransferLimitProperties;
 import com.banka.banka.dto.request.TransferRequest;
 import com.banka.banka.dto.response.TransactionResponse;
 import com.banka.banka.entity.Account;
@@ -48,6 +49,9 @@ class TransferServiceTest {
     @Mock
     private org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
+    @Mock
+    private TransferLimitProperties transferLimitProperties;
+
     /** Test edilen sınıf — mock'lar otomatik enjekte edilir. */
     @InjectMocks
     private TransferServiceImpl transferService;
@@ -82,6 +86,8 @@ class TransferServiceTest {
                 .currency("TRY")
                 .active(true)
                 .build();
+        lenient().when(transferLimitProperties.getDailyLimit())
+                .thenReturn(new BigDecimal("10000.00"));
     }
 
     // ── Görev 3: Başarılı Transfer Testi ─────────────────────────────────────
@@ -287,5 +293,12 @@ class TransferServiceTest {
         verify(accountRepository, never()).save(any());
         verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
         verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), any(Object.class));
+    }
+    @Test
+    void shouldRejectATransferThatExceedsTheDailyLimit() {
+        // sumTodayTransactionsByAccountId 9500 dönsün, istek 1000 olsun
+        // ASSERT: LimitExceededException fırlamalı
+        //         mesaj yapılandırılmış limiti içermeli (10000)
+        //         accountRepository.save / transactionHistoryRepository.save hiç çağrılmamalı
     }
 }
