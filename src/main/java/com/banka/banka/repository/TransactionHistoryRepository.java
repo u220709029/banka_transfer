@@ -18,12 +18,15 @@ public interface TransactionHistoryRepository extends JpaRepository<TransactionH
 
     List<TransactionHistory> findByAccount(Account account);
 
-    List<TransactionHistory> findByAccountOrderByTransactionDateDesc(Account account);
-
     List<TransactionHistory> findBySourceIban(String sourceIban);
 
     List<TransactionHistory> findByTargetIban(String targetIban);
 
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM TransactionHistory t WHERE t.account.id = :accountId AND t.transactionDate >= :startOfDay")
     BigDecimal sumTodayTransactionsByAccountId(@Param("accountId") Long accountId, @Param("startOfDay") LocalDateTime startOfDay);
+
+    @Query("SELECT t FROM TransactionHistory t " +
+            "WHERE t.account.id = :accountId OR t.targetAccount.id = :accountId " +
+            "ORDER BY t.transactionDate DESC")
+    List<TransactionHistory> findAllInvolvingAccount(@Param("accountId") Long accountId);
 }

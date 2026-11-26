@@ -5,6 +5,7 @@ import com.banka.banka.dto.request.TransferRequest;
 import com.banka.banka.dto.response.TransactionResponse;
 import com.banka.banka.entity.Account;
 import com.banka.banka.entity.TransactionHistory;
+import com.banka.banka.exception.AccountNotFoundException;
 import com.banka.banka.exception.InsufficientBalanceException;
 import com.banka.banka.exception.UnauthorizedAccountAccessException;
 import com.banka.banka.mapper.TransactionMapper;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.banka.banka.entity.User;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -300,5 +302,42 @@ class TransferServiceTest {
         // ASSERT: LimitExceededException fırlamalı
         //         mesaj yapılandırılmış limiti içermeli (10000)
         //         accountRepository.save / transactionHistoryRepository.save hiç çağrılmamalı
+    }
+    @Test
+    void shouldReturnTransactionsForOwnAccount() {
+        List<TransactionHistory> transactions = List.of(
+                TransactionHistory.builder().build(),
+                TransactionHistory.builder().build()
+        );
+        List<TransactionResponse> expectedResponses = List.of(
+                new TransactionResponse(),
+                new TransactionResponse()
+        );
+
+        when(accountRepository.findByIban(GONDEREN_IBAN)).thenReturn(Optional.of(gonderenHesap));
+        when(transactionHistoryRepository.findAllInvolvingAccount(1L)).thenReturn(transactions);
+        when(transactionMapper.toResponseList(transactions)).thenReturn(expectedResponses);
+
+        List<TransactionResponse> result = transferService.getTransactionsByIban(GONDEREN_IBAN, 1L);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        verify(transactionHistoryRepository).findAllInvolvingAccount(1L);
+    }
+
+    @Test
+    void shouldThrowAccountNotFoundWhenAccountBelongsToAnotherUser() {
+        User baskaKullanici = User.builder().id(99L).build();
+        Account baskasininHesabi = Account.builder()
+                .iban(ALICI_IBAN)
+                .user(baskaKullanici)
+                .build();
+
+        when(accountRepository.findByIban(ALICI_IBAN)).thenReturn(Optional.of(baskasininHesabi));
+
+        assertThrows(AccountNotFoundException.class, () -> transferService.getTransactionsByIban(ALICI_IBAN, 1L));
+
+        verify(transactionHistoryRepository, never()).findAllInvolvingAccount(anyLong());
+        verifyNoInteractions(transactionMapper);
     }
 }

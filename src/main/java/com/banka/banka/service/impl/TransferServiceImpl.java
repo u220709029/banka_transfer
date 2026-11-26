@@ -169,16 +169,6 @@ public class TransferServiceImpl implements TransferService {
         return transactionMapper.toResponse(savedTransaction);
     }
 
-    @Override
-    public List<TransactionResponse> getTransactionsByAccountId(Long accountId) {
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Hesap bulunamadı. ID: " + accountId));
-
-        List<TransactionHistory> transactions =
-                transactionHistoryRepository.findByAccountOrderByTransactionDateDesc(account);
-
-        return transactionMapper.toResponseList(transactions);
-    }
     private String fingerprintOf(TransferRequest request) {
         String raw = request.getFromIban() + "|" + request.getToIban() + "|"
                 + request.getAmount().stripTrailingZeros().toPlainString() + "|"
@@ -190,5 +180,18 @@ public class TransferServiceImpl implements TransferService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algoritması bulunamadı", e);
         }
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getTransactionsByIban(String iban, Long userId) {
+        Account account = accountRepository.findByIban(iban)
+                .orElseThrow(() -> new AccountNotFoundException("Hesap bulunamadı. IBAN: " + iban));
+
+        if (!account.getUser().getId().equals(userId)) {
+            throw new AccountNotFoundException("Hesap bulunamadı.");
+        }
+
+        return transactionMapper.toResponseList(
+                transactionHistoryRepository.findAllInvolvingAccount(account.getId()));
     }
 }
