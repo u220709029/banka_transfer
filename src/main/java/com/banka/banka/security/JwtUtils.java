@@ -1,5 +1,6 @@
 package com.banka.banka.security;
 
+import com.banka.banka.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
@@ -8,7 +9,6 @@ import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
@@ -20,14 +20,10 @@ import java.util.function.Function;
 
 @Component
 public class JwtUtils {
+    private final JwtProperties jwtProperties;
+    private final SecretKey signingKey;
 
-    // En az 256-bit (32 byte) Base64 encoded gizli anahtar
-    @Value("${jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
-    private String secretKey;
 
-    // 1 saat (3600000 ms) varsayilan gecerlilik suresi
-    @Value("${jwt.expiration:3600000}")
-    private long jwtExpiration;
 
     public String generateToken(String email) {
         return generateToken(new HashMap<>(), email);
@@ -38,10 +34,11 @@ public class JwtUtils {
                 .claims(extraClaims)
                 .subject(email)
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(getSigningKey(), Jwts.SIG.HS256)
+                .expiration(new Date(System.currentTimeMillis() + jwtProperties.getExpiration()))
+                .signWith(signingKey, Jwts.SIG.HS256)
                 .compact();
     }
+
 
     public String extractEmail(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -77,14 +74,16 @@ public class JwtUtils {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
 
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+
+
+    public JwtUtils(JwtProperties jwtProperties) {
+        this.jwtProperties = jwtProperties;
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtProperties.getSecret()));
     }
 }

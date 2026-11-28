@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_DB: bankadb
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "12345"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD tanimli degil}"
     ports:
       - "5432:5432"          # Yerel geliştirme için opsiyonel; üretimde kapatılabilir
     volumes:
@@ -52,7 +52,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bankadb
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: "12345"
+      SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD tanimli degil}"
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
@@ -63,6 +63,7 @@ services:
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
       TRANSFER_DAILY_LIMIT: "${TRANSFER_DAILY_LIMIT:-10000.00}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET tanimli degil}"
 
 # ───────────────────────────────────────────────────────
 # Named volume — konteyner silinse bile veriler kalır
